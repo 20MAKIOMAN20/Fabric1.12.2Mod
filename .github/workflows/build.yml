@@ -1,30 +1,51 @@
-# Automatically build the project and run any configured tests for every push
-# and submitted pull request. This can help catch issues that only occur on
-# certain Java versions, and provides a first line of defence against bad commits.
+name: Integración Continua (Build)
 
-name: Build
-
-on: [pull_request, push]
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: checkout repository
-        uses: actions/checkout@v6
-      - name: validate gradle wrapper
-        uses: gradle/actions/wrapper-validation@v5
-      - name: setup jdk
-        uses: actions/setup-java@v5
-        with:
-          java-version: "21"
-          distribution: "temurin"
-      - name: make gradle wrapper executable
-        run: chmod +x ./gradlew
-      - name: build
-        run: ./gradlew build
-      - name: capture build artifacts
-        uses: actions/upload-artifact@v6
-        with:
-          name: Artifacts
-          path: build/libs/
+    # 1. Descargar el código del repositorio
+    - name: Clonar repositorio
+      uses: actions/checkout@v4
+
+    # 2. Configurar Java (Para Legacy Fabric 1.12.2 se usa Java 8 para correr el mod, 
+    # pero a veces las herramientas de compilación modernas requieren Java 17)
+    - name: Configurar Java 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    # 3. Validar y dar permisos de ejecución al script de Gradle
+    - name: Dar permisos a gradlew
+      run: chmod +x gradlew
+
+    # 4. Configurar la caché de Gradle para que las compilaciones futuras sean más rápidas
+    - name: Configurar Caché de Gradle
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+          .gradle/loom-cache
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+
+    # 5. Compilar el mod y generar el archivo .jar
+    - name: Compilar Mod con Gradle
+      run: ./gradlew build
+
+    # 6. Guardar el archivo .jar resultante para que puedas descargarlo desde GitHub
+    - name: Guardar artefacto compilado
+      uses: actions/upload-artifact@v4
+      with:
+        name: Movblocs-Mod-JAR
+        path: build/libs/*.jar
