@@ -48,9 +48,10 @@ dependencies {
     mappings "net.legacyfabric:yarn:1.12.2+build.604:v2"
     modImplementation "net.fabricmc:fabric-loader:0.19.3"
 
-    // Legacy-Fabric API
-    modImplementation net.legacyfabric.legacy-fabric-api:legacy-fabric-api:1.13.5+1.12.2
+    // Legacy-Fabric API (¡Corregido con comillas!)
+    modImplementation "net.legacyfabric.legacy-fabric-api:legacy-fabric-api:1.13.5+1.12.2"
 }
+
 
 processResources {
 	inputs.property "version", project.version
