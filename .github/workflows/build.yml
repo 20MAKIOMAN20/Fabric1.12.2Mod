@@ -43,9 +43,32 @@ jobs:
     - name: Compilar Mod con Gradle
       run: ./gradlew build
 
-    # 6. Guardar el archivo .jar resultante para que puedas descargarlo desde GitHub
+    # 6. Capturar logs si falla la compilación
+    - name: Guardar logs de error
+      if: failure()
+      run: |
+        mkdir -p logs
+        echo "=== FECHA ===" >> logs/log.txt
+        date >> logs/log.txt
+        echo "" >> logs/log.txt
+        echo "=== GRADLE BUILD LOG ===" >> logs/log.txt
+        find . -path "*/build/reports" -type d | head -5 >> logs/log.txt
+        cat ~/.gradle/daemon/*/daemon-*.out.log >> logs/log.txt 2>/dev/null || echo "Sin log del daemon" >> logs/log.txt
+        echo "" >> logs/log.txt
+        echo "=== LOOM CACHE / ERRORES ===" >> logs/log.txt
+        find . -name "*.log" -path "*/build/*" -exec cat {} >> logs/log.txt \; 2>/dev/null || true
+
+    - name: Subir log de error
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: log-error
+        path: logs/log.txt
+
+    # 7. Guardar el archivo .jar resultante para que puedas descargarlo desde GitHub
     - name: Guardar artefacto compilado
       uses: actions/upload-artifact@v4
       with:
         name: Movblocs-Mod-JAR
         path: build/libs/*.jar
+
