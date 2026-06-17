@@ -4,8 +4,9 @@ import net.legacyfabric.example.block.MovingPlatformBlock;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.material.Material;
 import net.minecraft.entity.Entity;
-import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.util.Tickable;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -13,35 +14,35 @@ import net.minecraft.util.math.Box;
 import java.util.List;
 
 /**
- * Corazón de la plataforma movible.
+ * Lógica de movimiento de la plataforma.
  *
- * Cada X ticks mueve el bloque físico un paso hacia el destino.
- * Al llegar al extremo, invierte la dirección (movimiento de ping-pong).
- * Las entidades encima del bloque se arrastran automáticamente.
- *
- * Estado guardado en NBT → persiste al cerrar y reabrir el mundo.
+ * ⚠ Nombres corregidos para yarn mappings de 1.12.2:
+ *   - NbtCompound (no CompoundTag)
+ *   - writeNbt / readNbt (no toTag / fromTag)
+ *   - Material.AIR para comprobar aire (no state.isAir())
+ *   - entity.x / entity.y / entity.z (campos públicos, no getX/Y/Z())
+ *   - entity.setPosition() (no setPos())
+ *   - world.getEntities(Class, Box) (no getEntities(null, Box))
  */
 public class MovingPlatformBlockEntity extends BlockEntity implements Tickable {
 
-	// ── Configuración (editable con clic derecho) ──────────────────────────────
+	// ── Configuración ──────────────────────────────────────────────────────────
 	private MovingPlatformBlock.Axis movementAxis = MovingPlatformBlock.Axis.VERTICAL;
 	private BlockPos startPos  = BlockPos.ORIGIN;
 	private BlockPos endPos    = BlockPos.ORIGIN.up(5);
-	private float speedInBlocks = 1.0f; // bloques por segundo (0.5 – 5.0)
+	private float speedInBlocks = 1.0f;
 
 	// ── Estado interno ─────────────────────────────────────────────────────────
-	private int     currentStep     = 0;    // 0 = startPos, maxStep = endPos
-	private boolean goingForward    = true; // true = hacia endPos
+	private int     currentStep     = 0;
+	private boolean goingForward    = true;
 	private int     tickAccumulator = 0;
 
 	// ── Temporización ──────────────────────────────────────────────────────────
 
-	/** Ticks que deben pasar para avanzar un bloque. Ej: 1 bloque/seg = 20 ticks */
 	private int getTicksPerStep() {
 		return Math.max(1, Math.round(20.0f / speedInBlocks));
 	}
 
-	/** Distancia total en bloques entre startPos y endPos */
 	private int getDistance() {
 		switch (movementAxis) {
 			case VERTICAL:   return Math.abs(endPos.getY() - startPos.getY());
@@ -60,11 +61,9 @@ public class MovingPlatformBlockEntity extends BlockEntity implements Tickable {
 		if (tickAccumulator < getTicksPerStep()) return;
 		tickAccumulator = 0;
 
-		// Calcular siguiente paso
 		int maxStep  = Math.max(1, getDistance());
 		int nextStep = goingForward ? currentStep + 1 : currentStep - 1;
 
-		// Cambiar dirección al llegar a los extremos
 		if (nextStep > maxStep) {
 			goingForward = false;
 			nextStep = currentStep - 1;
@@ -76,57 +75,58 @@ public class MovingPlatformBlockEntity extends BlockEntity implements Tickable {
 		BlockPos currentBlockPos = getPosAtStep(currentStep);
 		BlockPos nextBlockPos    = getPosAtStep(nextStep);
 
-		// Solo moverse si el destino está libre
-		if (world.isAir(nextBlockPos)) {
+		// Comprobar si el destino está libre (en 1.12.2 se compara el material)
+		BlockState nextState = world.getBlockState(nextBlockPos);
+		if (nextState.getMaterial() == Material.AIR) {
 			moveBlock(currentBlockPos, nextBlockPos);
 			currentStep = nextStep;
 		} else {
-			// Obstáculo: invertir dirección
 			goingForward = !goingForward;
 		}
 	}
 
-	/** Convierte un número de paso a una BlockPos en el mundo */
 	private BlockPos getPosAtStep(int step) {
 		switch (movementAxis) {
 			case VERTICAL: {
 				int dir = (endPos.getY() >= startPos.getY()) ? 1 : -1;
-				return new BlockPos(startPos.getX(),
-				                    startPos.getY() + step * dir,
-				                    startPos.getZ());
+				return new BlockPos(
+					startPos.getX(),
+					startPos.getY() + step * dir,
+					startPos.getZ()
+				);
 			}
 			case HORIZONTAL:
 			default: {
 				int dir = (endPos.getX() >= startPos.getX()) ? 1 : -1;
-				return new BlockPos(startPos.getX() + step * dir,
-				                    startPos.getY(),
-				                    startPos.getZ());
+				return new BlockPos(
+					startPos.getX() + step * dir,
+					startPos.getY(),
+					startPos.getZ()
+				);
 			}
 		}
 	}
 
-	/**
-	 * Mueve el bloque físico de `from` a `to`
-	 * y arrastra las entidades que estaban encima.
-	 */
 	private void moveBlock(BlockPos from, BlockPos to) {
 		BlockState state = world.getBlockState(from);
-		if (state.isAir()) return; // Ya fue eliminado por algo externo
+		if (state.getMaterial() == Material.AIR) return;
 
 		double dx = to.getX() - from.getX();
 		double dy = to.getY() - from.getY();
 		double dz = to.getZ() - from.getZ();
 
-		// Caja de detección: 1 bloque encima de la plataforma
+		// Caja de detección de pasajeros encima del bloque
 		Box passengerArea = new Box(
 			from.getX(),       from.getY() + 0.9, from.getZ(),
 			from.getX() + 1.0, from.getY() + 2.5, from.getZ() + 1.0
 		);
 
-		// Mover entidades que estén encima
-		List<Entity> passengers = world.getEntities(null, passengerArea);
+		// En 1.12.2 getEntities requiere la clase como primer argumento
+		List<Entity> passengers = world.getEntities(Entity.class, passengerArea);
 		for (Entity e : passengers) {
-			e.setPos(e.getX() + dx, e.getY() + dy, e.getZ() + dz);
+			// En 1.12.2 las coordenadas son campos públicos x/y/z
+			// y el método se llama setPosition (no setPos)
+			e.setPosition(e.x + dx, e.y + dy, e.z + dz);
 		}
 
 		// Mover el bloque físico
@@ -134,7 +134,7 @@ public class MovingPlatformBlockEntity extends BlockEntity implements Tickable {
 		world.setBlockState(to,   state, 3);
 	}
 
-	// ── Getters y Setters ──────────────────────────────────────────────────────
+	// ── Getters / Setters ──────────────────────────────────────────────────────
 
 	public MovingPlatformBlock.Axis getMovementAxis() { return movementAxis; }
 	public void setMovementAxis(MovingPlatformBlock.Axis a) { this.movementAxis = a; }
@@ -152,47 +152,53 @@ public class MovingPlatformBlockEntity extends BlockEntity implements Tickable {
 
 	public int getRangeInBlocks() { return getDistance(); }
 
-	// ── NBT ────────────────────────────────────────────────────────────────────
+	// ── NBT: en 1.12.2 se usan writeNbt / readNbt con NbtCompound ─────────────
 
 	@Override
-	public void toTag(CompoundTag tag) {
-		super.toTag(tag);
+	public NbtCompound writeNbt(NbtCompound tag) {
+		super.writeNbt(tag);
+
 		tag.putString("MovementAxis", movementAxis.name());
 		tag.putFloat("SpeedInBlocks", speedInBlocks);
 		tag.putInt("CurrentStep", currentStep);
 		tag.putBoolean("GoingForward", goingForward);
 
-		CompoundTag s = new CompoundTag();
+		NbtCompound s = new NbtCompound();
 		s.putInt("x", startPos.getX());
 		s.putInt("y", startPos.getY());
 		s.putInt("z", startPos.getZ());
 		tag.put("StartPos", s);
 
-		CompoundTag e = new CompoundTag();
+		NbtCompound e = new NbtCompound();
 		e.putInt("x", endPos.getX());
 		e.putInt("y", endPos.getY());
 		e.putInt("z", endPos.getZ());
 		tag.put("EndPos", e);
+
+		return tag;
 	}
 
 	@Override
-	public void fromTag(BlockState state, CompoundTag tag) {
-		super.fromTag(state, tag);
+	public void readNbt(NbtCompound tag) {
+		super.readNbt(tag);
 
 		if (tag.contains("MovementAxis")) {
-			try { movementAxis = MovingPlatformBlock.Axis.valueOf(tag.getString("MovementAxis")); }
-			catch (IllegalArgumentException ex) { movementAxis = MovingPlatformBlock.Axis.VERTICAL; }
+			try {
+				movementAxis = MovingPlatformBlock.Axis.valueOf(tag.getString("MovementAxis"));
+			} catch (IllegalArgumentException ex) {
+				movementAxis = MovingPlatformBlock.Axis.VERTICAL;
+			}
 		}
 		if (tag.contains("SpeedInBlocks")) speedInBlocks = tag.getFloat("SpeedInBlocks");
 		if (tag.contains("CurrentStep"))   currentStep   = tag.getInt("CurrentStep");
 		if (tag.contains("GoingForward"))  goingForward  = tag.getBoolean("GoingForward");
 
 		if (tag.contains("StartPos")) {
-			CompoundTag s = tag.getCompound("StartPos");
+			NbtCompound s = tag.getCompound("StartPos");
 			startPos = new BlockPos(s.getInt("x"), s.getInt("y"), s.getInt("z"));
 		}
 		if (tag.contains("EndPos")) {
-			CompoundTag e = tag.getCompound("EndPos");
+			NbtCompound e = tag.getCompound("EndPos");
 			endPos = new BlockPos(e.getInt("x"), e.getInt("y"), e.getInt("z"));
 		}
 	}

@@ -4,8 +4,8 @@ import net.legacyfabric.example.entity.MovingPlatformBlockEntity;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockState;
-import net.minecraft.block.Material;
 import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.material.Material;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
@@ -19,10 +19,6 @@ import net.minecraft.world.World;
 
 public class MovingPlatformBlock extends Block implements BlockEntityProvider {
 
-	/**
-	 * VERTICAL  → sube y baja (eje Y)
-	 * HORIZONTAL → va de este a oeste (eje X)
-	 */
 	public enum Axis { VERTICAL, HORIZONTAL }
 
 	private final Axis movementAxis;
@@ -32,7 +28,7 @@ public class MovingPlatformBlock extends Block implements BlockEntityProvider {
 		this.movementAxis = axis;
 	}
 
-	// Al colocar el bloque inicializamos los puntos A y B
+	// Inicializar el BlockEntity al colocar el bloque
 	@Override
 	public void onPlaced(World world, BlockPos pos, BlockState state,
 	                     LivingEntity placer, ItemStack stack) {
@@ -49,9 +45,7 @@ public class MovingPlatformBlock extends Block implements BlockEntityProvider {
 		}
 	}
 
-	// Clic derecho:
-	//   - Mano vacía  → muestra info en chat
-	//   - Palo (stick) → cambia la velocidad
+	// Clic derecho: info con mano vacía, velocidad con palo
 	@Override
 	public boolean activate(BlockState state, World world, BlockPos pos,
 	                        PlayerEntity player, Hand hand, BlockHitResult hit) {
@@ -66,8 +60,8 @@ public class MovingPlatformBlock extends Block implements BlockEntityProvider {
 		if (held.isEmpty()) {
 			player.sendMessage(new LiteralText(
 				"§6[Plataforma] §fEje: " + platform.getMovementAxis()
-				+ " | Velocidad: " + platform.getSpeedInBlocks() + " bloques/seg"
-				+ " | Rango: " + platform.getRangeInBlocks() + " bloques"
+				+ " | Vel: " + platform.getSpeedInBlocks() + " bl/s"
+				+ " | Rango: " + platform.getRangeInBlocks() + " bl"
 			));
 			return true;
 		}
@@ -78,7 +72,7 @@ public class MovingPlatformBlock extends Block implements BlockEntityProvider {
 			platform.setSpeedInBlocks(next);
 			platform.markDirty();
 			player.sendMessage(new LiteralText(
-				"§6[Plataforma] §fVelocidad → " + next + " bloques/seg"
+				"§6[Plataforma] §fVelocidad → " + next + " bl/s"
 			));
 			return true;
 		}
@@ -91,7 +85,6 @@ public class MovingPlatformBlock extends Block implements BlockEntityProvider {
 		return new MovingPlatformBlockEntity();
 	}
 
-	// Posición destino por defecto: 5 bloques en el eje elegido
 	private BlockPos getDefaultEndPos(BlockPos origin) {
 		switch (movementAxis) {
 			case VERTICAL:   return origin.up(5);
